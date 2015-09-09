@@ -35,6 +35,8 @@ Create a new project, and in your `main.go`:
 package main
 
 import (
+	"flag"
+
 	"github.com/cloudflare/service"
 )
 
@@ -64,6 +66,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/cloudflare/service"
+	"github.com/cloudflare/service/render"
 )
 
 // HelloController handles the /hello/{name} route
@@ -87,7 +90,7 @@ func HelloControllerGet(w http.ResponseWriter, req *http.Request) {
 
 	hello := HelloWorld{Hello: name}
 
-	service.RenderJSON(w, http.StatusOK, hello)
+	render.JSON(w, http.StatusOK, hello)
 }
 ```
 
