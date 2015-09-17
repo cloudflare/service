@@ -184,3 +184,20 @@ func PageCount(total int64, limit int64) int64 {
 
 	return pages
 }
+
+// OffsetFromPage returns the offset from a page number. This helps older
+// interfaces continue to support pageNumber and perPage parameters whilst
+// we would use limit and offset internally.
+func OffsetFromPage(page int64, limit int64) (offset int64) {
+	offset = DefaultOffset
+
+	if page == 0 {
+		page = 1
+	}
+
+	if limit == 0 {
+		limit = DefaultLimit
+	}
+
+	return (page * limit) - limit
+}
