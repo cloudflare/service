@@ -49,11 +49,35 @@ func (slice EndPoints) Swap(i, j int) {
 // WebService represents a web server with a collection of controllers
 type WebService struct {
 	controllers []WebController
+	stats       *stats.Stats
 }
 
 // NewWebService provides a way to create a new blank WebService
 func NewWebService() WebService {
-	return WebService{}
+	ws := WebService{}
+
+	// add standard routes
+	// Stats controller
+	ws.stats = stats.New()
+	statsController := NewWebController("/stats")
+	statsController.AddMethodHandler(Get, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+		b, _ := json.Marshal(ws.stats.Data())
+		w.Write(b)
+	})
+	ws.AddWebController(statsController)
+
+	// Heartbeat controller (echoes the default version info)
+	heartbeatController := NewWebController("/heartbeat")
+	heartbeatController.AddMethodHandler(Get, func(w http.ResponseWriter, r *http.Request) {
+		v := Version{}
+		v.Hydrate()
+		render.JSON(w, http.StatusOK, v)
+	})
+	ws.AddWebController(heartbeatController)
+
+	return ws
 }
 
 // AddWebController allows callees to add their controller.
@@ -63,9 +87,9 @@ func (ws *WebService) AddWebController(wc WebController) {
 	ws.controllers = append(ws.controllers, wc)
 }
 
-// Run collects all of the controllers, wires up the routes and starts the server
-func (ws *WebService) Run(addr string) {
-
+// BuildRouter collects all of the controllers, wires up the routes and returns
+// the resulting router
+func (ws *WebService) BuildRouter() *mux.Router {
 	// Router
 	//
 	// StrictSlash forces the routes to be applied literally...
@@ -95,27 +119,8 @@ func (ws *WebService) Run(addr string) {
 		links = append(links, EndPoint{URL: wc.Route, Methods: wc.GetAllowedMethods()})
 	}
 
-	// Stats middleware
-	mStats := stats.New()
-
-	// Stats handler
-	r.HandleFunc("/stats", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		b, _ := json.Marshal(mStats.Data())
-		w.Write(b)
-	})
-	links = append(links, EndPoint{URL: "/stats", Methods: "GET"})
-
-	// Heartbeat handler echoes the default version info
-	r.HandleFunc("/heartbeat", func(w http.ResponseWriter, r *http.Request) {
-		v := Version{}
-		v.Hydrate()
-		render.JSON(w, http.StatusOK, v)
-	})
-	links = append(links, EndPoint{URL: "/heartbeat", Methods: "GET"})
-
 	// Profiling handlers
+	// XXX: should we add them using the public api too?
 	r.HandleFunc("/profiler/info.html", profiler.MemStatsHTMLHandler)
 	links = append(links, EndPoint{URL: "/profiler/info.html", Methods: "GET"})
 	r.HandleFunc("/profiler/info", profiler.ProfilingInfoJSONHandler)
@@ -160,15 +165,21 @@ func (ws *WebService) Run(addr string) {
 		)
 	})
 
+	return r
+}
+
+// Run collects all of the controllers, wires up the routes and starts the server
+func (ws *WebService) Run(addr string) {
 	n := negroni.New()
 
 	// Middleware for net/http/pprof
 	n.Use(pprof.Pprof())
 
 	// Middleware (added in the order that it is defined)
-	n.Use(mStats)
+	n.Use(ws.stats)
 
 	// Send errors to sentry if the SENTRY_DSN environment variable is set
+	r := ws.BuildRouter()
 	hfn := r.ServeHTTP
 	if os.Getenv("SENTRY_DSN") != "" {
 		hfn = raven.RecoveryHandler(hfn)
