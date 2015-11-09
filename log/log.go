@@ -296,7 +296,12 @@ func (l *loggingT) formatHeader(s severity, file string, line int) *buffer {
 
 func (l *loggingT) pln(s severity, args ...interface{}) {
 	buf, file, line := l.header(s, 0)
-	fmt.Fprintln(buf, args...)
+	// Remove new lines from args to ensure log lines are just lines
+	fmt.Fprintf(
+		buf,
+		"%s",
+		strings.Replace(fmt.Sprintf("%s", args...), "\n", "", -1),
+	)
 	l.output(s, buf, file, line)
 }
 
@@ -306,7 +311,12 @@ func (l *loggingT) p(s severity, args ...interface{}) {
 
 func (l *loggingT) pDepth(s severity, depth int, args ...interface{}) {
 	buf, file, line := l.header(s, depth)
-	fmt.Fprint(buf, args...)
+	// Remove new lines from args to ensure log lines are just lines
+	fmt.Fprintf(
+		buf,
+		"%s",
+		strings.Replace(fmt.Sprintf("%s", args...), "\n", "", -1),
+	)
 	if buf.Bytes()[buf.Len()-1] != '\n' {
 		buf.WriteByte('\n')
 	}
@@ -315,7 +325,12 @@ func (l *loggingT) pDepth(s severity, depth int, args ...interface{}) {
 
 func (l *loggingT) pf(s severity, format string, args ...interface{}) {
 	buf, file, line := l.header(s, 0)
-	fmt.Fprintf(buf, format, args...)
+	// Remove new lines from args to ensure log lines are just lines
+	fmt.Fprintf(
+		buf,
+		"%s",
+		strings.Replace(fmt.Sprintf(format, args...), "\n", "", -1),
+	)
 	if buf.Bytes()[buf.Len()-1] != '\n' {
 		buf.WriteByte('\n')
 	}
