@@ -14,14 +14,26 @@ Features:
 * Pagination struct for consistent pagination by API consumers
 * Automatic HTTP `OPTIONS`
 * Automatic HTTP `HEAD`
-* `glog` style logging interface
+* `glog`-style logging interface
 * Sentry support if `os.Getenv("SENTRY_DSN")` is set
 * Middleware capability (via [Negroni](https://github.com/codegangsta/negroni))
-* `/debug/profile/info.html` for web based profiling
-* `/debug/pprof` for pprof profiling
-* `/heartbeat` basic version info
-* `/stats` via Negroni middleware
-* `/version` endpoint that services can override with their own (i.e. to provide DB migration version information in addition to process version information)
+* `/_debug/profile/info.html` for web based profiling
+* `/_debug/pprof` for pprof profiling
+* `/_heartbeat` basic version info
+* `/_version` endpoint that services can override with their own (i.e. to provide DB migration version information in addition to process version information)
+
+## External dependencies
+
+```go
+go get github.com/codegangsta/negroni
+go get github.com/getsentry/raven-go
+go get github.com/mistifyio/negroni-pprof
+go get github.com/unrolled/render
+go get github.com/wblakecaldwell/profiler
+go get github.com/coreos/go-oidc/jose
+go get github.com/coreos/go-oidc/key
+go get github.com/coreos/go-oidc/oidc
+```
 
 ## Usage
 

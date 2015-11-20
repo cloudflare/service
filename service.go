@@ -1,7 +1,6 @@
 package service
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	gopprof "net/http/pprof"
@@ -9,12 +8,12 @@ import (
 	"sort"
 
 	"github.com/codegangsta/negroni"
-	"github.com/getsentry/raven-go"
+	raven "github.com/getsentry/raven-go"
 	"github.com/gorilla/mux"
-	"github.com/mistifyio/negroni-pprof"
-	"github.com/thoas/stats"
+	pprof "github.com/mistifyio/negroni-pprof"
 	"github.com/wblakecaldwell/profiler"
 
+	"github.com/cloudflare/service/log"
 	"github.com/cloudflare/service/render"
 )
 
@@ -22,7 +21,7 @@ const (
 	root string = `/`
 
 	// VersionRoute is the path to the version information endpoint
-	VersionRoute string = `/version`
+	VersionRoute string = `/_version`
 )
 
 // EndPoint describes an endpoint that exists on this web service
@@ -49,32 +48,21 @@ func (slice EndPoints) Swap(i, j int) {
 // WebService represents a web server with a collection of controllers
 type WebService struct {
 	controllers []WebController
-	stats       *stats.Stats
 }
 
 // NewWebService provides a way to create a new blank WebService
 func NewWebService() WebService {
 	ws := WebService{}
 
-	// add standard routes
-	// Stats controller
-	ws.stats = stats.New()
-	statsController := NewWebController("/stats")
-	statsController.AddMethodHandler(Get, func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		b, _ := json.Marshal(ws.stats.Data())
-		w.Write(b)
-	})
-	ws.AddWebController(statsController)
-
 	// Heartbeat controller (echoes the default version info)
-	heartbeatController := NewWebController("/heartbeat")
-	heartbeatController.AddMethodHandler(Get, func(w http.ResponseWriter, r *http.Request) {
-		v := Version{}
-		v.Hydrate()
-		render.JSON(w, http.StatusOK, v)
-	})
+	heartbeatController := NewWebController("/_heartbeat")
+	heartbeatController.AddMethodHandler(Get,
+		func(w http.ResponseWriter, r *http.Request) {
+			v := Version{}
+			v.Hydrate()
+			render.JSON(w, http.StatusOK, v)
+		},
+	)
 	ws.AddWebController(heartbeatController)
 
 	return ws
@@ -121,17 +109,17 @@ func (ws *WebService) BuildRouter() *mux.Router {
 
 	// Profiling handlers
 	// XXX: should we add them using the public api too?
-	r.HandleFunc("/profiler/info.html", profiler.MemStatsHTMLHandler)
-	links = append(links, EndPoint{URL: "/profiler/info.html", Methods: "GET"})
-	r.HandleFunc("/profiler/info", profiler.ProfilingInfoJSONHandler)
-	r.HandleFunc("/profiler/start", profiler.StartProfilingHandler)
-	r.HandleFunc("/profiler/stop", profiler.StopProfilingHandler)
+	r.HandleFunc("/_profiler/info.html", profiler.MemStatsHTMLHandler)
+	links = append(links, EndPoint{URL: "/_profiler/info.html", Methods: "GET"})
+	r.HandleFunc("/_profiler/info", profiler.ProfilingInfoJSONHandler)
+	r.HandleFunc("/_profiler/start", profiler.StartProfilingHandler)
+	r.HandleFunc("/_profiler/stop", profiler.StopProfilingHandler)
 
-	r.HandleFunc("/debug/pprof/", http.HandlerFunc(gopprof.Index))
-	links = append(links, EndPoint{URL: "/debug/pprof", Methods: "GET"})
-	r.HandleFunc("/debug/pprof/cmdline", http.HandlerFunc(gopprof.Cmdline))
-	r.HandleFunc("/debug/pprof/profile", http.HandlerFunc(gopprof.Profile))
-	r.HandleFunc("/debug/pprof/symbol", http.HandlerFunc(gopprof.Symbol))
+	r.HandleFunc("/_debug/pprof/", http.HandlerFunc(gopprof.Index))
+	links = append(links, EndPoint{URL: "/_debug/pprof", Methods: "GET"})
+	r.HandleFunc("/_debug/pprof/cmdline", http.HandlerFunc(gopprof.Cmdline))
+	r.HandleFunc("/_debug/pprof/profile", http.HandlerFunc(gopprof.Profile))
+	r.HandleFunc("/_debug/pprof/symbol", http.HandlerFunc(gopprof.Symbol))
 
 	if !versionSeen {
 		// If detailed version info is not provided, we echo the default
@@ -175,9 +163,6 @@ func (ws *WebService) Run(addr string) {
 	// Middleware for net/http/pprof
 	n.Use(pprof.Pprof())
 
-	// Middleware (added in the order that it is defined)
-	n.Use(ws.stats)
-
 	// Send errors to sentry if the SENTRY_DSN environment variable is set
 	r := ws.BuildRouter()
 	hfn := r.ServeHTTP
@@ -189,5 +174,5 @@ func (ws *WebService) Run(addr string) {
 	n.UseHandlerFunc(hfn)
 
 	// Wrap ListenAndServe and start the server
-	n.Run(addr)
+	log.Fatal(http.ListenAndServe(addr, n))
 }
