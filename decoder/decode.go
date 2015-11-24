@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
+	"mime"
 )
 
 var (
@@ -23,7 +23,11 @@ var (
 // content into the supplied interface. If the content-type of the request is
 // not one that matches a known decoder, then an error will be thrown
 func Decode(req *http.Request, v interface{}) error {
-	contentType := getContentType(req)
+	contentType, err := getContentType(req)
+	if err != nil {
+		return err
+	}
+
 	switch contentType {
 	case "application/json":
 		return jsonDecode(req, v)
@@ -34,9 +38,8 @@ func Decode(req *http.Request, v interface{}) error {
 	}
 }
 
-func getContentType(req *http.Request) (contentType string) {
-	contentType = strings.TrimSpace(req.Header.Get("Content-Type"))
-
+func getContentType(req *http.Request) (contentType string, err error) {
+	contentType, _, err = mime.ParseMediaType(req.Header.Get("Content-Type"))
 	return
 }
 
