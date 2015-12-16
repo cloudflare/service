@@ -17,11 +17,14 @@ import (
 	"github.com/cloudflare/service/render"
 )
 
+// VersionRoute is the path to the version information endpoint
+var VersionRoute string = `/_version`
+
+// HeartbeatRoute is the path to the heartbeat endpoint
+var HeartbeatRoute string = `/_heartbeat`
+
 const (
 	root string = `/`
-
-	// VersionRoute is the path to the version information endpoint
-	VersionRoute string = `/_version`
 )
 
 // EndPoint describes an endpoint that exists on this web service
@@ -55,7 +58,7 @@ func NewWebService() WebService {
 	ws := WebService{}
 
 	// Heartbeat controller (echoes the default version info)
-	heartbeatController := NewWebController("/_heartbeat")
+	heartbeatController := NewWebController(HeartbeatRoute)
 	heartbeatController.AddMethodHandler(Get,
 		func(w http.ResponseWriter, r *http.Request) {
 			v := Version{}
