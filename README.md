@@ -112,7 +112,7 @@ Access `http://localhost:8080/` for a list of the endpoints available and their 
 
 ## Heartbeat and Versioning
 
-To enable `/heartbeat` to echo the git hash of the current build and the timestamp of the current build you will need to use a Makefile to build your executable. You will need to adjust your main.go to support this:
+To enable `/_heartbeat` to echo the git hash of the current build and the timestamp of the current build you will need to use a Makefile to build your executable. You will need to adjust your main.go to support this:
 
 Your `main.go`:
 
