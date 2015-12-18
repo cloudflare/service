@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 
 	"github.com/cloudflare/service/render"
@@ -36,13 +37,17 @@ func (wc *WebController) GetAllowedMethods() string {
 		return wc.allowed
 	}
 
-	allowed := []string{}
+	allowed := []string{"HEAD", "OPTIONS"}
 
 	for k := range wc.handlers {
 		allowed = append(allowed, GetMethodName(k))
 	}
 
-	wc.allowed = strings.Join(allowed, ",")
+	// Sort the HTTP methods
+	var allowedMethods sort.StringSlice = allowed
+	allowedMethods.Sort()
+
+	wc.allowed = strings.Join(allowedMethods, ",")
 
 	return wc.allowed
 }
@@ -53,12 +58,9 @@ func (wc *WebController) AddMethodHandler(m int, h func(w http.ResponseWriter, r
 		log.Fatalf("Method iota %d not recognised", m)
 	}
 
-	if m == Options {
-		log.Fatal("Cannot set OPTIONS, this is provided for you")
-	}
-
-	if m == Head {
-		log.Fatal("Cannot set HEAD, this is provided for you")
+	// Cannot set OPTIONS or HEAD as this is automatically provided
+	if m == Options || m == Head {
+		log.Fatal(fmt.Sprintf("Cannot set %s, this is provided for you", GetMethodName(m)))
 	}
 
 	wc.handlers[m] = h
@@ -68,7 +70,8 @@ func (wc *WebController) AddMethodHandler(m int, h func(w http.ResponseWriter, r
 // GetMethodHandler returns the appropriate method handler for the request or a
 // Method Not Allowed handler
 func (wc *WebController) GetMethodHandler(m int) func(w http.ResponseWriter, req *http.Request) {
-	if m == Options {
+	// Respond to HEAD or OPTIONS
+	if m == Options || m == Head {
 		return func(w http.ResponseWriter, req *http.Request) {
 			w.Header().Set("Allow", wc.GetAllowedMethods())
 			w.Header().Set("Content-Length", "0")
@@ -76,18 +79,12 @@ func (wc *WebController) GetMethodHandler(m int) func(w http.ResponseWriter, req
 		}
 	}
 
-	if m == Head {
-		return func(w http.ResponseWriter, req *http.Request) {
-			w.Header().Set("Allow", wc.GetAllowedMethods())
-			w.Header().Set("Content-Length", "0")
-			w.WriteHeader(http.StatusOK)
-		}
-	}
-
+	// Got an handler for this method?
 	if h, ok := wc.handlers[m]; ok {
 		return h
 	}
 
+	// 405 method not allowed
 	return func(w http.ResponseWriter, req *http.Request) {
 		allowed := wc.GetAllowedMethods()
 		w.Header().Set("Allow", allowed)
