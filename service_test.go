@@ -2,9 +2,12 @@ package service
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -125,6 +128,60 @@ func TestCanOverrideRootEndpoint(t *testing.T) {
 	res, _ := http.DefaultClient.Do(request)
 
 	assertResponseBodyIs(t, res, "dummy for GET")
+}
+
+func TestResponsesFromAControllerAreOkay(t *testing.T) {
+	route := "/foobar"
+	ws := createDefaultWS()
+	methods := []int{Get, Post}
+	ws.AddWebController(basicControllerForMethods(route, methods))
+	startServer(ws)
+
+	for _, m := range []int{Get, Post} {
+		request, _ := http.NewRequest(GetMethodName(m), base+route, nil)
+		res, _ := http.DefaultClient.Do(request)
+
+		assertStatusCodeIs(t, res, http.StatusOK)
+		assertResponseBodyIs(t, res, "dummy for "+GetMethodName(m))
+	}
+}
+
+func TestCannotSetOptionsMethod(t *testing.T) {
+	testCannotSetMethodForController(t, Options, "TestCannotSetOptionsMethod")
+}
+
+func TestCannotSetHeadMethod(t *testing.T) {
+	testCannotSetMethodForController(t, Options, "TestCannotSetHeadMethod")
+}
+
+func testCannotSetMethodForController(t *testing.T, method int, testName string) {
+	// Only run the failing part in a different subprocess
+	if os.Getenv("BE_CRASHER") == "1" {
+		basicControllerForMethods("/foo", []int{method})
+		return
+	}
+
+	// Start the actual test in a different subprocess
+	cmd := exec.Command(os.Args[0], "-test.run="+testName)
+	cmd.Env = append(os.Environ(), "BE_CRASHER=1")
+	stdout, _ := cmd.StderrPipe()
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+
+	// Check the log fatal message
+	gotBytes, _ := ioutil.ReadAll(stdout)
+	got := string(gotBytes)
+	expected := fmt.Sprintf("Cannot set %s, this is provided for you", GetMethodName(method))
+	if got[len(got)-len(expected)-1:len(got)-1] != expected {
+		t.Fatalf("Unexpected log fatal. Got %s expected %s", got[len(got)-len(expected)-1:len(got)-1], expected)
+	}
+
+	// Check that the program exited
+	err := cmd.Wait()
+	if e, ok := err.(*exec.ExitError); !ok || e.Success() {
+		t.Fatalf("Process ran with err %v, want exit status 1", err)
+	}
 }
 
 func basicControllerForMethods(route string, methods []int) WebController {
